@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { AppItem, DeviceProfile } from '../types';
@@ -40,8 +41,9 @@ export const GeminiAssistant: React.FC<GeminiAssistantProps> = ({ app, device })
                 Be concise (max 3 sentences).
             `;
 
+            // Fix: Use gemini-3-flash-preview as per latest model guidelines
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
             });
 

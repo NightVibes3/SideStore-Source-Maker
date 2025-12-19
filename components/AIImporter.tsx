@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { AppItem, DEFAULT_APP } from '../types';
@@ -16,6 +17,7 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
     const [error, setError] = useState<string | null>(null);
     const [showGuide, setShowGuide] = useState(false);
     const [statusMessage, setStatusMessage] = useState<string>('');
+    const [groundingLinks, setGroundingLinks] = useState<any[]>([]);
 
     const performSearch = async (term: string) => {
         if (!term.trim()) return;
@@ -23,6 +25,7 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
         setLoading(true);
         setError(null);
         setStatusMessage('Searching and analyzing...');
+        setGroundingLinks([]);
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -71,13 +74,20 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                 }
             `;
 
+            // Fix: Use gemini-3-flash-preview and handle googleSearch tool results
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: {
                     tools: [{ googleSearch: {} }],
                 }
             });
+
+            // Guideline: Extract URLs from groundingChunks and list them
+            const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+            if (grounding) {
+                setGroundingLinks(grounding);
+            }
 
             const text = response.text;
             if (!text) throw new Error("No response from AI");
@@ -151,8 +161,9 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                 }
             `;
 
+            // Fix: Use gemini-3-flash-preview
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: { responseMimeType: "application/json" }
             });
@@ -273,6 +284,22 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                                 placeholder={`https://example.com/app1.ipa\nhttps://example.com/app2.ipa\n...`}
                                 className="w-full h-48 bg-slate-950 border border-slate-700 rounded-xl p-4 text-xs text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
                             />
+                        </div>
+                    )}
+
+                    {groundingLinks.length > 0 && (
+                        <div className="mt-4 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Search Sources</h4>
+                            <div className="flex flex-col gap-1.5">
+                                {groundingLinks.map((chunk, idx) => (
+                                    chunk.web && (
+                                        <a key={idx} href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 truncate">
+                                            <Link size={10} />
+                                            <span className="truncate">{chunk.web.title || chunk.web.uri}</span>
+                                        </a>
+                                    )
+                                ))}
+                            </div>
                         </div>
                     )}
 

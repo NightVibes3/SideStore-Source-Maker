@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Repo, Deployment, processRepoForExport } from '../types';
 import { Cloud, Check, Copy, AlertCircle, Loader2, Server, Github, Globe, Lock, X, Filter, Layers, History, ShieldAlert, BookOpen, AlertTriangle, Edit, RefreshCw, ChevronRight } from 'lucide-react';
@@ -80,7 +81,7 @@ export const PublishManager: React.FC<PublishManagerProps> = ({ repo, onClose, i
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    description: `TrollApps Repo: ${finalRepo.name} (Generated via Repo Gen)`,
+                    description: `SideStore Repo: ${finalRepo.name} (Generated via SideStore Source Maker)`,
                     public: !isUpdate ? (deployType === 'public') : undefined,
                     files: {
                         'repo.json': {

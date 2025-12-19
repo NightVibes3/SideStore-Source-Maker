@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { AppItem } from '../types';
@@ -56,8 +57,9 @@ export const CompatibilityScanner: React.FC<CompatibilityScannerProps> = ({ apps
             `;
 
             try {
+                // Fix: Use gemini-3-flash-preview as per latest model guidelines
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
+                    model: 'gemini-3-flash-preview',
                     contents: prompt,
                     config: { responseMimeType: "application/json" }
                 });

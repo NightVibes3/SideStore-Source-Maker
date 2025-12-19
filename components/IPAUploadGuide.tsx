@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Upload, FileUp, Loader2, X, AlertCircle, ExternalLink, HardDrive, Check } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -38,8 +39,9 @@ export const IPAUploadGuide: React.FC<IPAUploadGuideProps> = ({ onAnalysisComple
                 Example output: {"name": "YouTube Reborn", "version": "17.0", "bundleIdentifier": "com.google.ios.youtube", "localizedDescription": "Enhanced YouTube client."}
             `;
 
+            // Fix: Use gemini-3-flash-preview as per latest model guidelines
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: prompt,
                 config: { responseMimeType: "application/json" }
             });
