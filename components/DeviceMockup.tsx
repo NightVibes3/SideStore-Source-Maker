@@ -57,7 +57,7 @@ export const DeviceMockup: React.FC<DeviceMockupProps> = ({ device, repo, previe
                     {/* Header Image */}
                     <div className="relative h-48 w-full group">
                         {repo.headerImageURL ? (
-                            <img src={repo.headerImageURL} className="w-full h-full object-cover" alt="Header" />
+                            <img src={repo.headerImageURL} className="w-full h-full object-cover" alt="Header" referrerPolicy="no-referrer" />
                         ) : (
                             <div className="w-full h-full bg-blue-600/20 flex items-center justify-center text-blue-500 text-xs">Header Image</div>
                         )}
@@ -67,7 +67,7 @@ export const DeviceMockup: React.FC<DeviceMockupProps> = ({ device, repo, previe
                         <div className="absolute -bottom-8 left-6 p-1 bg-slate-950 rounded-[22%]">
                             <div className="w-20 h-20 rounded-[20%] overflow-hidden bg-slate-800 border border-slate-800/50">
                                 {repo.iconURL ? (
-                                    <img src={repo.iconURL} className="w-full h-full object-cover" />
+                                    <img src={repo.iconURL} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-slate-600">Icon</div>
                                 )}
@@ -94,7 +94,7 @@ export const DeviceMockup: React.FC<DeviceMockupProps> = ({ device, repo, previe
                                 repo.apps.map((app, i) => (
                                     <div key={i} className={`flex items-center gap-3 p-3 rounded-2xl transition-colors ${previewApp === app ? 'bg-blue-900/20 ring-1 ring-blue-500/50' : 'bg-slate-900'}`}>
                                         <div className="w-12 h-12 rounded-xl bg-slate-800 overflow-hidden shrink-0">
-                                            {app.iconURL && <img src={app.iconURL} className="w-full h-full object-cover" />}
+                                            {app.iconURL && <img src={app.iconURL} className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="font-semibold text-white truncate">{app.name}</div>

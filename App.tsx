@@ -192,7 +192,7 @@ const App: React.FC = () => {
                                     <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden shadow-lg group">
                                         <div className="h-40 bg-slate-800 relative">
                                             {repo.headerImageURL ? (
-                                                <img src={repo.headerImageURL} className="w-full h-full object-cover" alt="Header Preview" />
+                                                <img src={repo.headerImageURL} className="w-full h-full object-cover" alt="Header Preview" referrerPolicy="no-referrer" />
                                             ) : (
                                                 <div className="w-full h-full bg-indigo-600/10 flex flex-col items-center justify-center text-indigo-500/50">
                                                     <Layers size={32} className="mb-2 opacity-50" />
@@ -202,7 +202,7 @@ const App: React.FC = () => {
                                             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent flex items-end p-4">
                                                  <div className="w-16 h-16 rounded-[22%] bg-slate-900 border-2 border-slate-800 overflow-hidden shadow-2xl">
                                                     {repo.iconURL ? (
-                                                        <img src={repo.iconURL} className="w-full h-full object-cover" alt="Repo Icon" />
+                                                        <img src={repo.iconURL} className="w-full h-full object-cover" alt="Repo Icon" referrerPolicy="no-referrer" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-slate-700">
                                                             <LayoutTemplate size={20} />

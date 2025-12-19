@@ -110,7 +110,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onImport, onClose }) =
                 ) : (
                     <div className="p-6 space-y-6 text-center">
                         <div className="w-20 h-20 rounded-2xl bg-slate-800 mx-auto overflow-hidden border border-slate-700">
-                            {previewRepo.iconURL ? <img src={previewRepo.iconURL} className="w-full h-full object-cover" /> : <Package size={32} className="m-auto mt-6 text-slate-600" />}
+                            {previewRepo.iconURL ? <img src={previewRepo.iconURL} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={32} className="m-auto mt-6 text-slate-600" />}
                         </div>
                         <h3 className="text-xl font-bold text-white">{previewRepo.name}</h3>
                         <div className="bg-slate-800 p-4 rounded-xl flex justify-around">

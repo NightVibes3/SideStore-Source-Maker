@@ -50,6 +50,7 @@ export const AppCard = memo(({
                                 src={app.iconURL} 
                                 alt="" 
                                 className="w-full h-full object-cover" 
+                                referrerPolicy="no-referrer"
                                 onError={(e) => {
                                     e.currentTarget.style.display = 'none';
                                     e.currentTarget.parentElement?.classList.add('flex-col');
