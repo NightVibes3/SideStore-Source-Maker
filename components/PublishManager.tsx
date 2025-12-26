@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Repo, Deployment, processRepoForExport } from '../types';
-import { Cloud, Check, Copy, AlertCircle, Loader2, Server, Github, Globe, Lock, X, Filter, Layers, History, ShieldAlert, BookOpen, AlertTriangle, Edit, RefreshCw, ChevronRight } from 'lucide-react';
+import { Cloud, Check, Copy, AlertCircle, Loader2, Server, Github, Globe, Lock, X, Filter, Layers, History, ShieldAlert, BookOpen, AlertTriangle, Edit, RefreshCw, ChevronRight, ExternalLink } from 'lucide-react';
 
 interface PublishManagerProps {
     repo: Repo;
@@ -9,12 +8,19 @@ interface PublishManagerProps {
     initialConfig?: { deduplicate: boolean, filterIncompatible: boolean };
 }
 
+interface DeployResult {
+    appCount: number;
+    gistWebUrl: string;
+    rawUrl: string;
+    action: 'create' | 'update';
+}
+
 export const PublishManager: React.FC<PublishManagerProps> = ({ repo, onClose, initialConfig }) => {
     const [token, setToken] = useState('');
     const [deployType, setDeployType] = useState<'public' | 'secret'>('public');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [successMsg, setSuccessMsg] = useState<string | null>(null);
+    const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
     const [history, setHistory] = useState<Deployment[]>([]);
     const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
     const [showUpdateGuide, setShowUpdateGuide] = useState(false);
@@ -65,7 +71,7 @@ export const PublishManager: React.FC<PublishManagerProps> = ({ repo, onClose, i
 
         setLoading(true);
         setError(null);
-        setSuccessMsg(null);
+        setDeployResult(null);
         localStorage.setItem('gh_token', token);
 
         const finalRepo = processRepoForExport(repo, exportConfig);
@@ -99,6 +105,7 @@ export const PublishManager: React.FC<PublishManagerProps> = ({ repo, onClose, i
 
             const data = await response.json();
             const rawUrl = data.files['repo.json'].raw_url;
+            const webUrl = data.html_url;
 
             const newDeployment: Deployment = {
                 id: data.id,
@@ -113,7 +120,13 @@ export const PublishManager: React.FC<PublishManagerProps> = ({ repo, onClose, i
             setHistory(newHistory);
             localStorage.setItem('deploy_history', JSON.stringify(newHistory));
 
-            setSuccessMsg(isUpdate ? "Repo updated successfully!" : "New server deployed successfully!");
+            setDeployResult({
+                appCount: finalRepo.apps.length,
+                gistWebUrl: webUrl,
+                rawUrl: rawUrl,
+                action: isUpdate ? 'update' : 'create'
+            });
+
             if (!isUpdate) setTargetGistId(data.id);
         } catch (err: any) {
             setError(err.message || "Operation failed.");
@@ -211,13 +224,13 @@ export const PublishManager: React.FC<PublishManagerProps> = ({ repo, onClose, i
 
                 <div className="flex border-b border-slate-800 bg-slate-950/50">
                     <button 
-                        onClick={() => { setMode('create'); setError(null); setSuccessMsg(null); }}
+                        onClick={() => { setMode('create'); setError(null); setDeployResult(null); }}
                         className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2 ${mode === 'create' ? 'border-blue-500 text-blue-400 bg-blue-900/10' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
                     >
                         <Server size={16} /> Create New
                     </button>
                     <button 
-                        onClick={() => { setMode('update'); setError(null); setSuccessMsg(null); }}
+                        onClick={() => { setMode('update'); setError(null); setDeployResult(null); }}
                         className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2 ${mode === 'update' ? 'border-amber-500 text-amber-400 bg-amber-900/10' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
                     >
                         <RefreshCw size={16} /> Update Existing
@@ -291,7 +304,35 @@ export const PublishManager: React.FC<PublishManagerProps> = ({ repo, onClose, i
                         )}
 
                         {error && <div className="p-3 bg-red-900/30 border border-red-900/50 rounded text-xs text-red-200">{error}</div>}
-                        {successMsg && <div className="p-3 bg-green-900/30 border border-green-900/50 rounded text-xs text-green-200">{successMsg}</div>}
+                        
+                        {deployResult && (
+                            <div className="bg-green-900/20 border border-green-900/50 rounded-xl p-4 space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                                <div className="flex items-center gap-2 text-green-400 font-bold">
+                                    <Check size={20} />
+                                    <span>{deployResult.action === 'create' ? "Deployed Successfully!" : "Updated Successfully!"}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div className="bg-slate-900/50 p-2 rounded border border-slate-800">
+                                        <span className="text-slate-500 text-xs block uppercase">Apps Exported</span>
+                                        <span className="text-white font-mono font-bold">{deployResult.appCount}</span>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-2 rounded border border-slate-800">
+                                        <span className="text-slate-500 text-xs block uppercase">Status</span>
+                                        <span className="text-white font-mono font-bold">Active</span>
+                                    </div>
+                                </div>
+                                <div className="pt-2 flex flex-col gap-2">
+                                    <a 
+                                        href={deployResult.gistWebUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-2 w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors"
+                                    >
+                                        <Github size={14} /> View on GitHub Gist <ExternalLink size={12} />
+                                    </a>
+                                </div>
+                            </div>
+                        )}
 
                         <button onClick={() => processDeploy(mode === 'update')} disabled={loading} className={`w-full py-3 font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 ${mode === 'create' ? 'bg-blue-600 text-white' : 'bg-amber-600 text-white'}`}>
                             {loading ? <Loader2 className="animate-spin" /> : (mode === 'create' ? 'Deploy' : 'Update')}

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { X, Twitter, Github, Coffee, ChevronRight } from 'lucide-react';
 
@@ -8,7 +7,7 @@ interface AboutModalProps {
 
 export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
     // Convert GitHub blob URL to raw for direct image display
-    const profileImageUrl = "https://github.com/NightVibes3/Test/raw/main/super_resolution_20251210210218561.jpeg";
+    const profileImageUrl = "https://raw.githubusercontent.com/NightVibes3/Test/main/super_resolution_20251210210218561.jpeg";
 
     return (
         <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black animate-in fade-in duration-200 sm:items-center sm:bg-black/90 sm:p-4">

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { AppItem, validateURL } from '../types';
 import { InputGroup } from './InputGroup';
-import { Trash2, X, Image as ImageIcon } from 'lucide-react';
+import { Image } from './Image';
+import { Trash2, X, Image as ImageIcon, FileSearch, AlertTriangle } from 'lucide-react';
 
 interface AppEditorProps {
     app: AppItem;
     onUpdate: (id: string, updatedApp: AppItem) => void;
     onDelete: (id: string) => void;
     onClose: () => void;
+    onInspectIPA: () => void;
 }
 
-export const AppEditor: React.FC<AppEditorProps> = ({ app, onUpdate, onDelete, onClose }) => {
+export const AppEditor: React.FC<AppEditorProps> = ({ app, onUpdate, onDelete, onClose, onInspectIPA }) => {
     const [deleteConfirm, setDeleteConfirm] = useState(false);
 
     const handleChange = (field: keyof AppItem, value: any) => {
@@ -48,13 +50,17 @@ export const AppEditor: React.FC<AppEditorProps> = ({ app, onUpdate, onDelete, o
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl relative animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-700">
                 <div className="flex items-center gap-3">
-                    {app.iconURL && !iconError ? (
-                        <img src={app.iconURL} alt="Icon" className="w-12 h-12 rounded-xl bg-slate-900 object-cover border border-slate-600" onError={(e) => (e.currentTarget.src = 'https://placehold.co/128x128.png')} />
-                    ) : (
-                        <div className="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center border border-slate-600">
-                            <ImageIcon className="w-6 h-6 text-slate-500" />
-                        </div>
-                    )}
+                    <div className="w-12 h-12 rounded-xl bg-slate-900 overflow-hidden border border-slate-600">
+                        <Image 
+                            src={app.iconURL}
+                            className="w-full h-full object-cover"
+                            fallback={
+                                <div className="w-full h-full flex items-center justify-center">
+                                    <ImageIcon className="w-6 h-6 text-slate-500" />
+                                </div>
+                            }
+                        />
+                    </div>
                     <div>
                         <h3 className="text-lg font-bold text-white leading-tight">Editing App</h3>
                         <p className="text-xs text-slate-400">{app.name || "Untitled"}</p>
@@ -75,7 +81,28 @@ export const AppEditor: React.FC<AppEditorProps> = ({ app, onUpdate, onDelete, o
                 <InputGroup label="App Name" value={app.name} onChange={(v) => handleChange('name', v)} />
                 <InputGroup label="Category" value={app.category || "Utilities"} onChange={(v) => handleChange('category', v)} placeholder="Games, Tools, etc." />
                 
-                <InputGroup label="Bundle ID" value={app.bundleIdentifier} onChange={(v) => handleChange('bundleIdentifier', v)} placeholder="com.example.app" />
+                <InputGroup 
+                    label="Bundle ID" 
+                    value={app.bundleIdentifier} 
+                    onChange={(v) => handleChange('bundleIdentifier', v)} 
+                    placeholder="com.example.app" 
+                    rightElement={
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 text-[10px] text-amber-500 font-bold" title="Manual Bundle IDs often mismatch.">
+                                <AlertTriangle size={12} />
+                                <span className="hidden sm:inline">Verify ID</span>
+                            </div>
+                            <button 
+                                onClick={onInspectIPA}
+                                className="text-[10px] bg-blue-600 hover:bg-blue-500 px-2 py-0.5 rounded text-white flex items-center gap-1 transition-colors"
+                                title="Fix Bundle ID Mismatch by inspecting IPA"
+                            >
+                                <FileSearch size={10} /> Fix from IPA
+                            </button>
+                        </div>
+                    }
+                    helperText="Warning: Bundle IDs often mismatch. Use 'Fix from IPA' to get the exact ID from the file."
+                />
                 <InputGroup label="Developer" value={app.developerName} onChange={(v) => handleChange('developerName', v)} />
 
                 <InputGroup label="Version" value={app.version} onChange={(v) => handleChange('version', v)} className="md:col-span-1" />

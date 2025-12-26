@@ -12,7 +12,9 @@
     "@google/genai": "^1.33.0",
     "lucide-react": "^0.559.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "unzipit": "^1.4.3",
+    "plist": "^3.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

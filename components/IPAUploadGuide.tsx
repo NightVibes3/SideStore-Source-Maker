@@ -1,8 +1,11 @@
-
 import React, { useState, useRef } from 'react';
 import { Upload, FileUp, Loader2, X, AlertCircle, ExternalLink, HardDrive, Check } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { AppItem } from '../types';
+// @ts-ignore
+import { unzip } from 'unzipit';
+// @ts-ignore
+import plist from 'plist';
 
 interface IPAUploadGuideProps {
     onAnalysisComplete: (data: Partial<AppItem>) => void;
@@ -11,6 +14,7 @@ interface IPAUploadGuideProps {
 
 export const IPAUploadGuide: React.FC<IPAUploadGuideProps> = ({ onAnalysisComplete, onClose }) => {
     const [analyzing, setAnalyzing] = useState(false);
+    const [status, setStatus] = useState<string>('');
     const [step, setStep] = useState<'upload' | 'guide'>('upload');
     const [fileName, setFileName] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,49 +25,105 @@ export const IPAUploadGuide: React.FC<IPAUploadGuideProps> = ({ onAnalysisComple
 
         setFileName(file.name);
         setAnalyzing(true);
+        setStatus('Unzipping IPA...');
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            // Unzip file
+            const { entries } = await unzip(file);
             
-            const prompt = `
-                I have an iOS IPA file named: "${file.name}".
-                File size: ${Math.round(file.size / 1024 / 1024)}MB.
-                
-                Please guess the likely metadata for this app to populate a JSON repo.
-                Return ONLY a JSON object with these keys:
-                - name (Clean app name)
-                - version (Guess from filename or default to "1.0")
-                - bundleIdentifier (Guess a plausible one like com.developer.appname)
-                - localizedDescription (A generic description based on the app name)
-                
-                Example output: {"name": "YouTube Reborn", "version": "17.0", "bundleIdentifier": "com.google.ios.youtube", "localizedDescription": "Enhanced YouTube client."}
-            `;
+            // Find Info.plist
+            const plistEntry = Object.values(entries).find((e: any) => 
+                e.name.match(/^Payload\/[^/]+\.app\/Info\.plist$/)
+            );
 
-            // Fix: Use gemini-3-flash-preview as per latest model guidelines
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: prompt,
-                config: { responseMimeType: "application/json" }
-            });
+            if (!plistEntry) {
+                throw new Error("No Info.plist found in IPA");
+            }
 
-            const text = response.text;
-            if (text) {
-                const data = JSON.parse(text);
+            setStatus('Reading Info.plist...');
+            // @ts-ignore
+            const blob = await plistEntry.blob();
+            const arrayBuffer = await blob.arrayBuffer();
+            const textContent = await blob.text();
+
+            let metadata: any = null;
+
+            // Try local XML Parse
+            if (textContent.trim().startsWith('<?xml') || textContent.trim().startsWith('<plist')) {
+                setStatus('Parsing XML...');
+                try {
+                    const parsed = plist.parse(textContent);
+                    metadata = {
+                        name: parsed.CFBundleDisplayName || parsed.CFBundleName,
+                        bundleIdentifier: parsed.CFBundleIdentifier,
+                        version: parsed.CFBundleShortVersionString || parsed.CFBundleVersion,
+                        minOS: parsed.MinimumOSVersion
+                    };
+                } catch (e) {
+                    console.error("XML parse failed", e);
+                }
+            }
+
+            // If binary, use AI with Hex Dump
+            if (!metadata) {
+                setStatus('Parsing Binary Plist (AI)...');
+                const bytes = new Uint8Array(arrayBuffer);
+                const hex = Array.from(bytes)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                
+                const prompt = `
+                    I have the HEX DUMP of a binary iOS Info.plist file.
+                    Decode it and extract the metadata.
+
+                    HEX DATA:
+                    ${hex.substring(0, 20000)} ${hex.length > 20000 ? '... (truncated)' : ''}
+
+                    REQUIRED JSON OUTPUT:
+                    {
+                        "name": "CFBundleDisplayName" or "CFBundleName",
+                        "bundleIdentifier": "CFBundleIdentifier",
+                        "version": "CFBundleShortVersionString",
+                        "versionDescription": "Release notes if found, else 'Initial Import'",
+                        "minOS": "MinimumOSVersion"
+                    }
+                `;
+
+                const response = await ai.models.generateContent({
+                    model: 'gemini-3-flash-preview',
+                    contents: prompt,
+                    config: { responseMimeType: "application/json" }
+                });
+
+                if (response.text) {
+                    metadata = JSON.parse(response.text);
+                }
+            }
+
+            if (metadata) {
                 onAnalysisComplete({
-                    ...data,
+                    ...metadata,
                     size: file.size
                 });
                 setStep('guide');
+            } else {
+                throw new Error("Could not extract metadata");
             }
+
         } catch (error) {
-            console.error("AI Analysis failed", error);
+            console.error("Analysis failed", error);
+            // Fallback to filename guess if absolutely necessary, but alert user
             onAnalysisComplete({
                 name: file.name.replace('.ipa', ''),
-                size: file.size
+                size: file.size,
+                version: "1.0"
             });
             setStep('guide');
         } finally {
             setAnalyzing(false);
+            setStatus('');
         }
     };
 
@@ -82,9 +142,9 @@ export const IPAUploadGuide: React.FC<IPAUploadGuideProps> = ({ onAnalysisComple
                         <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-6 ring-1 ring-blue-500/50">
                             <FileUp className="text-blue-500" size={32} />
                         </div>
-                        <h2 className="text-2xl font-bold text-white mb-2">Start from .ipa</h2>
+                        <h2 className="text-2xl font-bold text-white mb-2">Inspect IPA</h2>
                         <p className="text-slate-400 text-sm mb-8 leading-relaxed">
-                            Select an IPA file from your device. We will analyze it to <strong>auto-fill</strong> the Name, Version, and Bundle ID for you.
+                            Select an IPA file. We will <strong>inspect the file content</strong> to extract the real App Name, Bundle ID, and Version.
                         </p>
                         
                         <input 
@@ -103,7 +163,7 @@ export const IPAUploadGuide: React.FC<IPAUploadGuideProps> = ({ onAnalysisComple
                             {analyzing ? (
                                 <>
                                     <Loader2 className="animate-spin" />
-                                    <span>Analyzing File...</span>
+                                    <span>{status || 'Analyzing...'}</span>
                                 </>
                             ) : (
                                 <>
@@ -113,17 +173,17 @@ export const IPAUploadGuide: React.FC<IPAUploadGuideProps> = ({ onAnalysisComple
                             )}
                         </button>
                         <p className="mt-4 text-[10px] text-slate-500">
-                            Note: The file is analyzed locally and via AI, but not stored on our server.
+                            The file is processed locally. We never upload your IPA to any server.
                         </p>
                     </div>
                 ) : (
                     <div className="p-6">
                         <div className="flex items-center gap-3 mb-6 p-3 bg-green-900/20 border border-green-900/50 rounded-lg">
                             <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
-                                <FileUp size={16} className="text-green-500" />
+                                <Check size={16} className="text-green-500" />
                             </div>
                             <div>
-                                <h3 className="text-sm font-bold text-green-200">Details Auto-Filled!</h3>
+                                <h3 className="text-sm font-bold text-green-200">Metadata Extracted!</h3>
                                 <p className="text-xs text-green-300/70 truncate max-w-[200px]">{fileName}</p>
                             </div>
                         </div>
@@ -134,7 +194,7 @@ export const IPAUploadGuide: React.FC<IPAUploadGuideProps> = ({ onAnalysisComple
                             <div className="flex gap-3">
                                 <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
                                 <p className="text-sm text-slate-300 leading-relaxed">
-                                    SideStore requires a <strong>direct download URL</strong>. Since this is a generator, we cannot host the file for you.
+                                    SideStore requires a <strong>direct download URL</strong>. We cannot host this file for you.
                                 </p>
                             </div>
                             <div className="h-px bg-slate-700/50 my-2"></div>

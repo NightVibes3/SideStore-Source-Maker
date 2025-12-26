@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
 import { AppItem } from '../types';
 import { AppEditor } from './AppEditor';
-import { Smartphone, Edit2, ArchiveX, ShieldAlert, AlertTriangle, Terminal } from 'lucide-react';
+import { Image } from './Image';
+import { Smartphone, Edit2, ArchiveX } from 'lucide-react';
 
 interface AppCardProps {
     app: AppItem;
@@ -11,6 +12,7 @@ interface AppCardProps {
     onUpdate: (id: string, updatedApp: AppItem) => void;
     onDelete: (id: string) => void;
     onCloseEdit: () => void;
+    onInspectIPA: () => void;
 }
 
 export const AppCard = memo(({ 
@@ -20,7 +22,8 @@ export const AppCard = memo(({
     onToggleEdit, 
     onUpdate, 
     onDelete, 
-    onCloseEdit 
+    onCloseEdit,
+    onInspectIPA
 }: AppCardProps) => {
     
     const tint = app.tintColor || '#3b82f6';
@@ -45,21 +48,11 @@ export const AppCard = memo(({
                     onClick={() => onToggleEdit(app.id)}
                 >
                     <div className="w-14 h-14 rounded-xl bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 shadow-md border border-white/5 relative z-10">
-                        {app.iconURL ? (
-                            <img 
-                                src={app.iconURL} 
-                                alt="" 
-                                className="w-full h-full object-cover" 
-                                referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.parentElement?.classList.add('flex-col');
-                                    e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-600"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>');
-                                }}
-                            />
-                        ) : (
-                            <Smartphone size={24} className="text-slate-600" />
-                        )}
+                        <Image 
+                            src={app.iconURL}
+                            className="w-full h-full object-cover"
+                            fallback={<Smartphone size={24} className="text-slate-600" />}
+                        />
                         {isExcluded && (
                             <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[1px]">
                                 <ArchiveX size={20} className="text-white" />
@@ -93,7 +86,7 @@ export const AppCard = memo(({
                 
                 {isEditing && (
                     <div className="border-t border-slate-800 p-4 bg-slate-900/50">
-                        <AppEditor app={app} onUpdate={onUpdate} onDelete={onDelete} onClose={onCloseEdit} />
+                        <AppEditor app={app} onUpdate={onUpdate} onDelete={onDelete} onClose={onCloseEdit} onInspectIPA={onInspectIPA} />
                     </div>
                 )}
             </div>

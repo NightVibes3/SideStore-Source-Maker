@@ -1,8 +1,11 @@
-
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { AppItem, DEFAULT_APP } from '../types';
-import { Sparkles, Link, Search, AlertCircle, Loader2, X, ArrowRight, Github, Globe, Info, Archive, List, FileText } from 'lucide-react';
+import { Sparkles, Link, Search, AlertCircle, Loader2, X, ArrowRight, Github, Globe, Info, Archive, List, FileText, Binary } from 'lucide-react';
+// @ts-ignore
+import { unzip } from 'unzipit';
+// @ts-ignore
+import plist from 'plist';
 
 interface AIImporterProps {
     onImport: (app: AppItem) => void; // For single imports
@@ -19,71 +22,177 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
     const [statusMessage, setStatusMessage] = useState<string>('');
     const [groundingLinks, setGroundingLinks] = useState<any[]>([]);
 
+    const fetchAndInspectIPA = async (url: string): Promise<any | null> => {
+        try {
+            setStatusMessage('Attempting to inspect IPA file...');
+            // Try to unzip the URL directly
+            const { entries } = await unzip(url);
+            
+            // Find Info.plist in Payload/*.app/Info.plist
+            const plistEntry = Object.values(entries).find((e: any) => 
+                e.name.match(/^Payload\/[^/]+\.app\/Info\.plist$/)
+            );
+
+            if (!plistEntry) {
+                console.warn("No Info.plist found in IPA");
+                return null;
+            }
+
+            setStatusMessage('Extracting Info.plist...');
+            // @ts-ignore
+            const blob = await plistEntry.blob();
+            const arrayBuffer = await blob.arrayBuffer();
+            const textContent = await blob.text();
+
+            // Check if XML or Binary
+            if (textContent.trim().startsWith('<?xml') || textContent.trim().startsWith('<plist')) {
+                setStatusMessage('Parsing XML Plist...');
+                try {
+                    const parsed = plist.parse(textContent);
+                    return {
+                        name: parsed.CFBundleDisplayName || parsed.CFBundleName,
+                        bundleIdentifier: parsed.CFBundleIdentifier,
+                        version: parsed.CFBundleShortVersionString || parsed.CFBundleVersion,
+                        minOS: parsed.MinimumOSVersion
+                    };
+                } catch (e) {
+                    console.error("XML Parsing failed, trying AI", e);
+                }
+            }
+            
+            // If binary or XML parse failed, use AI with Hex Dump (Reliable & Text-based)
+            setStatusMessage('Analyzing Binary Plist with AI...');
+            
+            const bytes = new Uint8Array(arrayBuffer);
+            const hex = Array.from(bytes)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const prompt = `
+                I have the HEX DUMP of a binary iOS Info.plist file.
+                Decode it and extract the metadata.
+
+                HEX DATA:
+                ${hex.substring(0, 30000)} ${hex.length > 30000 ? '... (truncated)' : ''}
+
+                REQUIRED JSON OUTPUT:
+                {
+                    "name": "CFBundleDisplayName" or "CFBundleName",
+                    "bundleIdentifier": "CFBundleIdentifier",
+                    "version": "CFBundleShortVersionString",
+                    "versionDescription": "Release notes if found, else 'Initial Import'",
+                    "minOS": "MinimumOSVersion"
+                }
+
+                Strictly return JSON.
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+
+            const text = response.text;
+            if (!text) return null;
+            return JSON.parse(text);
+
+        } catch (e) {
+            console.error("IPA Inspection failed (likely CORS or not a zip):", e);
+            return null;
+        }
+    };
+
     const performSearch = async (term: string) => {
         if (!term.trim()) return;
-        setInput(term);
+        
+        // Decode URL encoded logs if pasted directly
+        let processedTerm = term;
+        try {
+            if (term.includes('%20') || term.includes('%3A')) {
+                processedTerm = decodeURIComponent(term);
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        setInput(processedTerm); // Update UI to show decoded text
         setLoading(true);
         setError(null);
-        setStatusMessage('Searching and analyzing...');
         setGroundingLinks([]);
 
         try {
+            const isUrl = processedTerm.trim().match(/^https?:\/\//);
+            let inspectedData = null;
+
+            if (isUrl) {
+                inspectedData = await fetchAndInspectIPA(processedTerm.trim());
+            }
+
+            setStatusMessage(inspectedData ? 'Finalizing app details...' : 'Analyzing input (Search or Error Log)...');
+
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            const isUrl = term.trim().match(/^https?:\/\//);
-            
             const prompt = `
-                I need to generate a JSON entry for an iOS app to add to a SideStore/TrollStore repository.
+                You are an expert iOS repository assistant.
                 
-                User Input: "${term}"
+                USER INPUT: "${processedTerm}"
                 
-                ${isUrl ? `
-                CRITICAL INSTRUCTION (User Provided URL):
-                1. The user provided a specific download URL. YOU MUST USE THIS URL.
-                2. If the URL is a GitHub "blob" page (e.g. .../blob/main/app.ipa), CHANGE it to the "raw" version (e.g. .../raw/main/app.ipa) for the 'downloadURL' field.
-                3. Do NOT search for a different "better" download link. Do NOT hallucinate a release link from a different repo.
-                4. EXTRACT the app name from the filename in the URL.
-                5. Search specifically for this app's metadata (Icon, Bundle ID, Version) to fill in the rest.
+                ${inspectedData ? `
+                MODE: DIRECT FILE INSPECTION SUCCESSFUL.
+                I have already inspected the IPA file and found the EXACT metadata.
+                
+                INSPECTED DATA (Use this TRUTH over any search results):
+                ${JSON.stringify(inspectedData)}
+                
+                Task:
+                1. Use the "bundleIdentifier" from INSPECTED DATA. Do NOT change it.
+                2. Use the "version" from INSPECTED DATA.
+                3. Use the provided URL as "downloadURL".
+                4. Fill in missing fields (description, iconURL) using the name/id.
                 ` : `
-                CRITICAL INSTRUCTION (Search Mode):
-                1. SEARCH for the specific app. 
-                   - FIRST PRIORITY: Search specifically within the "ios-ipa-collection" on Archive.org. 
-                     Query: "site:archive.org/download/ios-ipa-collection ${term}"
-                   - SECOND PRIORITY: Official GitHub Repository (Releases page).
-                   - THIRD PRIORITY: Official websites (e.g. altstore.io).
-                2. FIND DOWNLOAD URL:
-                   - MUST be a direct link to an .ipa file.
-                   - PREFER: GitHub Release asset URLs or Archive.org direct download links.
-                   - AVOID: Webpages or placeholders.
+                MODE: ${isUrl ? 'URL Search (Inspection Failed)' : 'Name/Text Search'}.
+                1. ${isUrl ? 'Use the URL as downloadURL.' : 'Find download URL.'}
+                2. Find accurate metadata using Google Search.
+                
+                CRITICAL - ERROR LOG PARSING:
+                If the user pasted a SideStore/AltStore error log (e.g., "The bundle ID X does not match the one specified by the source Y"):
+                - Extract the *ACTUAL* Bundle ID (X). This is the one found in the file/log.
+                - Use this ACTUAL ID as the "bundleIdentifier".
+                - Use the name of the app mentioned in the log.
+                - Ignore the "specified by source" ID (Y), as it is incorrect.
+                
+                CRITICAL: ACCURATE BUNDLE ID
+                The user explicitly forbids guessing. You MUST search for the real Bundle Identifier.
                 `}
 
-                REQUIRED OUTPUT (JSON):
+                REQUIRED JSON OUTPUT:
                 {
-                    "name": "string",
-                    "bundleIdentifier": "string",
-                    "developerName": "string",
-                    "version": "string",
+                    "name": "App Name",
+                    "bundleIdentifier": "com.real.verified.bundle.id", 
+                    "developerName": "Developer Name",
+                    "version": "1.0",
                     "versionDate": "YYYY-MM-DD",
-                    "versionDescription": "string",
-                    "downloadURL": "string", // The User's URL (converted to raw) OR the best found direct IPA link
-                    "localizedDescription": "string",
-                    "iconURL": "string", // High quality direct image URL
+                    "versionDescription": "Release notes",
+                    "downloadURL": "URL",
+                    "localizedDescription": "Description",
+                    "iconURL": "Image URL",
                     "tintColor": "#hex",
-                    "category": "string", // e.g. "Games", "Utilities", "Social", "Emulators"
+                    "category": "Utilities",
                     "size": 0
                 }
             `;
 
-            // Fix: Use gemini-3-flash-preview and handle googleSearch tool results
             const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-3-flash-preview', 
                 contents: prompt,
                 config: {
                     tools: [{ googleSearch: {} }],
                 }
             });
 
-            // Guideline: Extract URLs from groundingChunks and list them
             const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
             if (grounding) {
                 setGroundingLinks(grounding);
@@ -108,12 +217,17 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
             if (isFakeUrl(newApp.downloadURL)) newApp.downloadURL = "";
             if (isFakeUrl(newApp.iconURL)) newApp.iconURL = "";
 
+            if (inspectedData && inspectedData.bundleIdentifier) {
+                newApp.bundleIdentifier = inspectedData.bundleIdentifier;
+                newApp.version = inspectedData.version;
+            }
+
             onImport(newApp);
             onClose();
 
         } catch (err: any) {
             console.error(err);
-            setError("Failed to process. If providing a link, ensure it is accessible.");
+            setError("Failed to process. If providing a link, ensure it is accessible. " + err.message);
         } finally {
             setLoading(false);
         }
@@ -141,9 +255,12 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                 ${JSON.stringify(urls)}
 
                 Instructions:
-                1. Infer "name", "bundleIdentifier" (guess com.example.appname), and "version" from the URL filename.
-                2. "downloadURL" MUST be the URL I provided (convert github /blob/ to /raw/ if needed).
-                3. Return a JSON ARRAY of objects.
+                1. Infer "name" and "version" from the URL filename.
+                2. For "bundleIdentifier":
+                   - Do NOT lazy guess "com.example.app".
+                   - Try to construct it from the URL path if it contains the developer name or project name.
+                3. "downloadURL" MUST be the URL I provided.
+                4. Return a JSON ARRAY of objects.
                 
                 Example Item Structure:
                 {
@@ -161,7 +278,6 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                 }
             `;
 
-            // Fix: Use gemini-3-flash-preview
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: prompt,
@@ -214,7 +330,7 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">Smart Import</h2>
                     <p className="text-slate-400 text-sm leading-relaxed">
-                        Search for an app, paste a link, or mass import a list of URLs.
+                        Search for an app, paste a link, or paste a SideStore Error Log to fix it.
                     </p>
                 </div>
 
@@ -246,13 +362,16 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                                     <input
                                         type="text"
                                         className="block w-full pl-10 pr-4 py-4 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                                        placeholder="Search app or paste URL..."
+                                        placeholder="Search, paste URL, or paste Error Log..."
                                         value={input}
                                         onChange={(e) => setInput(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && performSearch(input)}
                                         autoFocus
                                     />
                                 </div>
+                                <p className="text-[10px] text-slate-500">
+                                    If you paste a URL, we will attempt to <strong>inspect</strong> the file for 100% accurate Bundle IDs (if CORS allowed).
+                                </p>
                             </div>
                             
                             {!showGuide && !loading && (
@@ -342,6 +461,15 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                             {showGuide && (
                                 <div className="mt-4 p-4 bg-slate-800/50 rounded-xl border border-slate-700 space-y-3 animate-in slide-in-from-top-2 text-sm">
                                     <div className="flex items-start gap-3">
+                                        <Binary className="text-blue-400 shrink-0 mt-1" size={16} />
+                                        <div>
+                                            <p className="font-bold text-slate-200">Binary Inspection</p>
+                                            <p className="text-slate-400 text-xs mt-1">
+                                                We now inspect the IPA file directly (if CORS allowed) to get the <strong>exact</strong> Bundle ID.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
                                         <Github className="text-white shrink-0 mt-1" size={16} />
                                         <div>
                                             <p className="font-bold text-slate-200">GitHub</p>
@@ -355,7 +483,7 @@ export const AIImporter: React.FC<AIImporterProps> = ({ onImport, onClose }) => 
                                         <div>
                                             <p className="font-bold text-slate-200">Archive.org</p>
                                             <p className="text-slate-400 text-xs mt-1">
-                                                We prioritize the <strong>ios-ipa-collection</strong> (14k+ apps).
+                                                We prioritize the <strong>ios-ipa-collection</strong>.
                                             </p>
                                         </div>
                                     </div>

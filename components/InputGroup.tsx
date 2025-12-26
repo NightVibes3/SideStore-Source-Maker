@@ -10,6 +10,7 @@ interface InputGroupProps {
     helperText?: string;
     error?: string | null;
     className?: string;
+    rightElement?: React.ReactNode;
 }
 
 export const InputGroup: React.FC<InputGroupProps> = ({ 
@@ -20,13 +21,17 @@ export const InputGroup: React.FC<InputGroupProps> = ({
     placeholder, 
     helperText,
     error,
-    className = ""
+    className = "",
+    rightElement
 }) => {
     return (
         <div className={`flex flex-col gap-1.5 ${className}`}>
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex justify-between">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex justify-between items-center">
                 <span>{label}</span>
-                {error && <span className="text-red-400 flex items-center gap-1 normal-case tracking-normal"><AlertCircle size={10} /> {error}</span>}
+                <div className="flex items-center gap-2">
+                    {rightElement}
+                    {error && <span className="text-red-400 flex items-center gap-1 normal-case tracking-normal"><AlertCircle size={10} /> {error}</span>}
+                </div>
             </label>
             {type === 'textarea' ? (
                 <textarea

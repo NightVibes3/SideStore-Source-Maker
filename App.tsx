@@ -11,7 +11,9 @@ import { DeviceManager } from './components/DeviceManager';
 import { CompatibilityScanner } from './components/CompatibilityScanner';
 import { AboutModal } from './components/AboutModal';
 import { Toast, ToastMessage, ToastType } from './components/Toast';
-import { Download, Plus, Copy, LayoutTemplate, Smartphone, Code, Cloud, Sparkles, Bot, X, Layers, FileDown, Filter, ShieldAlert, History, Search, Check, ScanEye, Info, Palette, Globe, Type } from 'lucide-react';
+import { Image } from './components/Image';
+import { IPAUploadGuide } from './components/IPAUploadGuide';
+import { Download, Plus, Copy, LayoutTemplate, Smartphone, Code, Cloud, Sparkles, Bot, X, Layers, FileDown, Filter, ShieldAlert, History, Search, Check, ScanEye, Info, Palette, Globe, Type, FileSearch } from 'lucide-react';
 
 const generateId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
@@ -52,6 +54,7 @@ const App: React.FC = () => {
     const [showAboutModal, setShowAboutModal] = useState(false);
     const [showDeviceManager, setShowDeviceManager] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
+    const [showIPAGuide, setShowIPAGuide] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -91,6 +94,34 @@ const App: React.FC = () => {
         setRepo(prev => ({ ...prev, apps: [...prev.apps, { ...newApp, id }] }));
         setEditingAppId(id); 
         setActiveTab('apps');
+    };
+
+    const handleIPAAnalysis = (data: Partial<AppItem>) => {
+        if (editingAppId) {
+             const currentApp = repo.apps.find(a => a.id === editingAppId);
+             if (currentApp) {
+                 const updated = { ...currentApp, ...data };
+                 updateApp(editingAppId, updated);
+                 addToast("Updated Bundle ID & Version from IPA", 'success');
+             }
+        } else {
+            const id = generateId();
+            // Merge with DEFAULT_APP to ensure all fields exist
+            const newApp: AppItem = { 
+                ...DEFAULT_APP, 
+                ...data, 
+                id,
+                // Ensure we don't carry over undefined if data is partial
+                name: data.name || "Imported App",
+                bundleIdentifier: data.bundleIdentifier || "com.example.app",
+                version: data.version || "1.0",
+            };
+            setRepo(prev => ({ ...prev, apps: [...prev.apps, newApp] }));
+            setEditingAppId(id);
+            setActiveTab('apps');
+            addToast("Created new app from IPA inspection", 'success');
+        }
+        setShowIPAGuide(false);
     };
 
     const updateApp = useCallback((id: string, updatedApp: AppItem) => {
@@ -165,15 +196,22 @@ const App: React.FC = () => {
                     </button>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button onClick={() => setShowAIImporter(true)} className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2">
+                    <button 
+                        onClick={() => setShowIPAGuide(true)} 
+                        className="flex bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-sm border border-slate-700 items-center gap-2 transition-colors"
+                        title="Inspect IPA file to get exact Bundle ID"
+                    >
+                        <FileSearch size={16} /> <span className="hidden sm:inline">Inspect IPA</span>
+                    </button>
+                    <button onClick={() => setShowAIImporter(true)} className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-900/20 hover:shadow-indigo-900/40 transition-all">
                         <Sparkles size={16} /> <span className="hidden sm:inline">Smart Add</span>
                     </button>
-                    <button onClick={() => setShowImportModal(true)} className="bg-slate-800 text-slate-200 px-3 py-2 rounded-lg text-sm border border-slate-700 flex items-center gap-2">
+                    <button onClick={() => setShowImportModal(true)} className="bg-slate-800 text-slate-200 px-3 py-2 rounded-lg text-sm border border-slate-700 flex items-center gap-2 hover:bg-slate-700 transition-colors">
                         <FileDown size={16} /> <span className="hidden sm:inline">Import</span>
                     </button>
                     <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
-                        <button onClick={() => setViewMode(viewMode === 'json' ? 'editor' : 'json')} className={`p-2 rounded-md ${viewMode === 'json' ? 'bg-slate-600' : 'text-slate-400'}`}><Code size={18} /></button>
-                        <button onClick={() => setViewMode(viewMode === 'preview' ? 'editor' : 'preview')} className={`p-2 rounded-md ${viewMode === 'preview' ? 'bg-slate-600' : 'text-slate-400'}`}><Smartphone size={18} /></button>
+                        <button onClick={() => setViewMode(viewMode === 'json' ? 'editor' : 'json')} className={`p-2 rounded-md transition-colors ${viewMode === 'json' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}`}><Code size={18} /></button>
+                        <button onClick={() => setViewMode(viewMode === 'preview' ? 'editor' : 'preview')} className={`p-2 rounded-md transition-colors ${viewMode === 'preview' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}`}><Smartphone size={18} /></button>
                     </div>
                 </div>
             </header>
@@ -191,23 +229,29 @@ const App: React.FC = () => {
                                     {/* Header Preview Section */}
                                     <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden shadow-lg group">
                                         <div className="h-40 bg-slate-800 relative">
-                                            {repo.headerImageURL ? (
-                                                <img src={repo.headerImageURL} className="w-full h-full object-cover" alt="Header Preview" referrerPolicy="no-referrer" />
-                                            ) : (
-                                                <div className="w-full h-full bg-indigo-600/10 flex flex-col items-center justify-center text-indigo-500/50">
-                                                    <Layers size={32} className="mb-2 opacity-50" />
-                                                    <span className="text-xs font-bold uppercase tracking-widest">No Header Image</span>
-                                                </div>
-                                            )}
+                                            <Image 
+                                                src={repo.headerImageURL} 
+                                                className="w-full h-full object-cover" 
+                                                alt="Header Preview" 
+                                                fallback={
+                                                    <div className="w-full h-full bg-indigo-600/10 flex flex-col items-center justify-center text-indigo-500/50">
+                                                        <Layers size={32} className="mb-2 opacity-50" />
+                                                        <span className="text-xs font-bold uppercase tracking-widest">No Header Image</span>
+                                                    </div>
+                                                }
+                                            />
                                             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent flex items-end p-4">
-                                                 <div className="w-16 h-16 rounded-[22%] bg-slate-900 border-2 border-slate-800 overflow-hidden shadow-2xl">
-                                                    {repo.iconURL ? (
-                                                        <img src={repo.iconURL} className="w-full h-full object-cover" alt="Repo Icon" referrerPolicy="no-referrer" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-slate-700">
-                                                            <LayoutTemplate size={20} />
-                                                        </div>
-                                                    )}
+                                                 <div className="w-16 h-16 rounded-[22%] bg-slate-900 border-2 border-slate-800 overflow-hidden shadow-2xl relative">
+                                                    <Image 
+                                                        src={repo.iconURL} 
+                                                        className="w-full h-full object-cover" 
+                                                        alt="Repo Icon" 
+                                                        fallback={
+                                                            <div className="w-full h-full flex items-center justify-center text-slate-700 bg-slate-900">
+                                                                <LayoutTemplate size={20} />
+                                                            </div>
+                                                        }
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
@@ -280,7 +324,17 @@ const App: React.FC = () => {
                                                 <div className="h-px bg-slate-800 flex-1"></div>
                                             </div>
                                             {apps.map(app => (
-                                                <AppCard key={app.id} app={app} isEditing={editingAppId === app.id} isExcluded={!includedIds.has(app.id)} onToggleEdit={handleToggleEdit} onUpdate={updateApp} onDelete={deleteApp} onCloseEdit={handleCloseEdit} />
+                                                <AppCard 
+                                                    key={app.id} 
+                                                    app={app} 
+                                                    isEditing={editingAppId === app.id} 
+                                                    isExcluded={!includedIds.has(app.id)} 
+                                                    onToggleEdit={handleToggleEdit} 
+                                                    onUpdate={updateApp} 
+                                                    onDelete={deleteApp} 
+                                                    onCloseEdit={handleCloseEdit} 
+                                                    onInspectIPA={() => setShowIPAGuide(true)}
+                                                />
                                             ))}
                                         </div>
                                     ))}
@@ -300,7 +354,49 @@ const App: React.FC = () => {
                 </div>
 
                 <div className={`fixed inset-0 z-40 bg-slate-950 md:relative md:w-[450px] md:border-l md:border-slate-800 ${viewMode !== 'editor' ? 'flex' : 'hidden md:flex'} flex-col`}>
-                    <DeviceMockup device={device} repo={repo} previewApp={editingApp} onConfigure={() => setShowDeviceManager(true)} />
+                    {viewMode === 'json' ? (
+                        <div className="flex flex-col h-full bg-slate-950 animate-in fade-in slide-in-from-right-4 duration-300">
+                             <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center">
+                                        <Code className="text-blue-500" size={18} />
+                                    </div>
+                                    <div>
+                                        <h2 className="font-bold text-white text-sm">Source JSON</h2>
+                                        <p className="text-[10px] text-slate-500 font-mono">repo.json</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => setViewMode('editor')} 
+                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                             </div>
+                             <div className="flex-1 overflow-auto p-4 relative group">
+                                <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap break-all bg-slate-900/50 p-4 rounded-xl border border-slate-800/50 select-text selection:bg-blue-500/30 selection:text-blue-200">
+                                    {generateJSON()}
+                                </pre>
+                             </div>
+                             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md">
+                                <button 
+                                    onClick={copyToClipboard} 
+                                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-900/20"
+                                >
+                                    <Copy size={18} /> 
+                                    <span>Copy to Clipboard</span>
+                                </button>
+                             </div>
+                        </div>
+                    ) : (
+                        <DeviceMockup 
+                            device={device} 
+                            repo={repo} 
+                            previewApp={editingApp} 
+                            onConfigure={() => setShowDeviceManager(true)} 
+                            onGoBack={() => setViewMode('editor')}
+                        />
+                    )}
                 </div>
 
                 {showScanner && <CompatibilityScanner apps={repo.apps} onUpdateApps={handleScanUpdates} onClose={() => setShowScanner(false)} />}
@@ -309,6 +405,7 @@ const App: React.FC = () => {
                 {showAIImporter && <AIImporter onImport={handleSmartAppImport} onClose={() => setShowAIImporter(false)} />}
                 {showImportModal && <ImportModal onImport={handleImportRepo} onClose={() => setShowImportModal(false)} />}
                 {showAboutModal && <AboutModal onClose={() => setShowAboutModal(false)} />}
+                {showIPAGuide && <IPAUploadGuide onAnalysisComplete={handleIPAAnalysis} onClose={() => setShowIPAGuide(false)} />}
             </div>
         </div>
     );

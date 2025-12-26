@@ -14,6 +14,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onImport, onClose }) =
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [previewRepo, setPreviewRepo] = useState<Repo | null>(null);
+    const [imageError, setImageError] = useState(false);
 
     const cleanString = (str: string) => str.replace(/^\uFEFF/, '').trim();
 
@@ -54,6 +55,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onImport, onClose }) =
                     compatibilityStatus: 'unknown'
                 }));
             }
+            setImageError(false);
             setPreviewRepo(newRepo);
         } catch (err: any) {
             throw new Error(err.message || "Failed to parse JSON.");
@@ -109,8 +111,17 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onImport, onClose }) =
                     </div>
                 ) : (
                     <div className="p-6 space-y-6 text-center">
-                        <div className="w-20 h-20 rounded-2xl bg-slate-800 mx-auto overflow-hidden border border-slate-700">
-                            {previewRepo.iconURL ? <img src={previewRepo.iconURL} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={32} className="m-auto mt-6 text-slate-600" />}
+                        <div className="w-20 h-20 rounded-2xl bg-slate-800 mx-auto overflow-hidden border border-slate-700 flex items-center justify-center">
+                            {previewRepo.iconURL && !imageError ? (
+                                <img 
+                                    src={previewRepo.iconURL} 
+                                    className="w-full h-full object-cover" 
+                                    referrerPolicy="no-referrer"
+                                    onError={() => setImageError(true)}
+                                />
+                            ) : (
+                                <Package size={32} className="text-slate-600" />
+                            )}
                         </div>
                         <h3 className="text-xl font-bold text-white">{previewRepo.name}</h3>
                         <div className="bg-slate-800 p-4 rounded-xl flex justify-around">
